@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PixelChomp</string>
+    <string name="title_activity_main">PixelChomp</string>
+    <string name="package_name">com.pixelchomp.game</string>
+    <string name="custom_url_scheme">com.pixelchomp.game</string>
+</resources>
