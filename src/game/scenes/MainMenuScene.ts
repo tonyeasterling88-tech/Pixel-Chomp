@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_CENTER_X, GAME_CENTER_Y, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager } from '../systems/AudioManager';
 import { SaveManager, type ControlsMode, type GameSettings } from '../systems/SaveManager';
+import { createFullscreenToggle } from '../ui/FullscreenToggle';
 import { createMenuCard } from '../ui/Menus';
 import { createMenuKeys } from '../utils/input';
 import { SceneKeys } from '../utils/SceneKeys';
@@ -41,6 +42,11 @@ export class MainMenuScene extends Phaser.Scene {
       description: 'Swipe or use the d-pad. Power pellets flip the chase.',
     },
     {
+      id: 'leaderboard',
+      label: 'LEADERBOARD',
+      description: 'View the local top-10 arcade scores for this device.',
+    },
+    {
       id: 'credits',
       label: 'CREDITS',
       description: 'Pixel Chomp: original arcade-inspired maze-chase project.',
@@ -64,6 +70,7 @@ export class MainMenuScene extends Phaser.Scene {
     this.add.rectangle(GAME_CENTER_X, GAME_CENTER_Y, GAME_WIDTH, GAME_HEIGHT, 0x09111d, 1);
     this.add.rectangle(GAME_CENTER_X, 88, 620, 170, 0x1a2b48, 0.22).setAngle(-4);
     this.add.rectangle(GAME_CENTER_X + 140, GAME_HEIGHT - 62, 280, 120, 0x16304a, 0.18).setAngle(7);
+    createFullscreenToggle(this, { x: GAME_WIDTH - 104, y: 30, compact: true });
 
     this.card = createMenuCard(this, GAME_CENTER_X, GAME_CENTER_Y + 16, 580, 324);
 
@@ -301,6 +308,9 @@ export class MainMenuScene extends Phaser.Scene {
           'Swipe the screen to queue turns.\nCollect every pellet, dodge enemies, and chase frightened foes for combo points.',
         );
         this.footerText.setText('Pick another item to keep exploring the menu.');
+        break;
+      case 'leaderboard':
+        this.scene.start(SceneKeys.GameOver, { mode: 'leaderboard', fromMenu: true });
         break;
       case 'credits':
         this.detailText.setText(

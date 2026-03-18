@@ -24,6 +24,15 @@ export class ScoreManager {
     this.score = 0;
     this.comboIndex = 0;
     this.extraLifeEarned = false;
+    this.highScore = this.saveManager.getHighScore();
+    this.emit();
+  }
+
+  restoreGame(score: number): void {
+    this.score = Math.max(0, Math.floor(score));
+    this.comboIndex = 0;
+    this.extraLifeEarned = false;
+    this.highScore = Math.max(this.saveManager.getHighScore(), this.score);
     this.emit();
   }
 

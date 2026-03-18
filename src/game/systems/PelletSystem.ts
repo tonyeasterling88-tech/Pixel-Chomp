@@ -27,14 +27,23 @@ export class PelletSystem {
       }));
   }
 
-  reset(): void {
+  reset(collectedKeys: string[] = []): void {
     this.clearSprites();
     this.collectibles.clear();
+    const collectedSet = new Set(collectedKeys);
 
     for (const pellet of this.initialState) {
       const key = gridPointToKey(pellet.tile);
-      const copy = { ...pellet, tile: { ...pellet.tile } };
+      const copy = {
+        ...pellet,
+        tile: { ...pellet.tile },
+        collected: collectedSet.has(key),
+      };
       this.collectibles.set(key, copy);
+
+      if (copy.collected) {
+        continue;
+      }
 
       const world = this.grid.tileToWorld(copy.tile);
       const sprite = this.scene.add.image(
@@ -78,6 +87,17 @@ export class PelletSystem {
 
   getRemainingCount(): number {
     return [...this.collectibles.values()].filter((collectible) => !collectible.collected).length;
+  }
+
+  getCollectedKeys(): string[] {
+    return [...this.collectibles.entries()]
+      .filter(([, collectible]) => collectible.collected)
+      .map(([key]) => key);
+  }
+
+  destroy(): void {
+    this.clearSprites();
+    this.collectibles.clear();
   }
 
   private clearSprites(): void {

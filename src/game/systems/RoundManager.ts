@@ -50,6 +50,20 @@ export class RoundManager {
     this.emit();
   }
 
+  restoreRun(round: number, lives: number, pelletsRemaining: number): void {
+    this.round = Math.max(1, Math.floor(round));
+    this.lives = Math.max(1, Math.floor(lives));
+    this.pelletsRemaining = Math.max(0, Math.floor(pelletsRemaining));
+    this.state = 'respawning';
+    this.globalMode = 'scatter';
+    this.phaseIndex = 0;
+    this.phaseElapsedMs = 0;
+    this.frightenedRemainingMs = 0;
+    this.frightenedDurationMs = 0;
+    this.frightenedFlashMs = 0;
+    this.emit();
+  }
+
   setPlaying(): void {
     this.state = 'playing';
     this.emit();

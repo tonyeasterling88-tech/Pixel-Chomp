@@ -32,6 +32,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     autoCenter: Phaser.Scale.CENTER_BOTH,
     autoRound: true,
     expandParent: true,
+    fullscreenTarget: 'app',
   },
   scene: [BootScene, PreloadScene, MainMenuScene, GameScene, UIScene, GameOverScene],
 };

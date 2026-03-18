@@ -5,6 +5,7 @@ import { gameEvents } from '../utils/events';
 import { SceneKeys } from '../utils/SceneKeys';
 import type { RoundSnapshot } from '../systems/RoundManager';
 import type { ScoreSnapshot } from '../systems/ScoreManager';
+import { createFullscreenToggle } from '../ui/FullscreenToggle';
 
 export class UIScene extends Phaser.Scene {
   private hud!: Hud;
@@ -16,6 +17,7 @@ export class UIScene extends Phaser.Scene {
 
   create(): void {
     this.hud = new Hud(this);
+    createFullscreenToggle(this, { x: 718, y: 56, compact: true });
 
     gameEvents.on(GameEvents.ScoreChanged, this.handleScoreChanged, this);
     gameEvents.on(GameEvents.RoundChanged, this.handleRoundChanged, this);

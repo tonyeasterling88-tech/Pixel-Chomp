@@ -48,12 +48,21 @@ body {
   justify-content: center;
 }
 
+#app:fullscreen {
+  width: 100vw;
+  height: 100dvh;
+  background:
+    radial-gradient(circle at top, rgba(62, 191, 181, 0.18), transparent 35%),
+    linear-gradient(180deg, #172038 0%, #0b1320 60%, #05080f 100%);
+}
+
 canvas {
   display: block;
   max-width: 100%;
   max-height: 100%;
   margin: auto;
   touch-action: none;
+  image-rendering: pixelated;
   border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow:
     0 30px 90px rgba(0, 0, 0, 0.45),

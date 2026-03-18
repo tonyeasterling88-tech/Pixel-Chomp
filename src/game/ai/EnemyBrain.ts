@@ -1,5 +1,6 @@
 import type { Direction, EnemyDefinition, EnemyMode, GridPoint } from '../data/types';
 import {
+  chooseFrightenedDirection,
   chooseBestDirection,
   chooseTargetTile,
   type BehaviorContext,
@@ -24,11 +25,7 @@ export class EnemyBrain {
     context: BehaviorContext,
   ): Direction | null {
     if (this.mode === 'frightened') {
-      if (options.length === 0) {
-        return null;
-      }
-
-      return options[Math.floor(Math.random() * options.length)] ?? null;
+      return chooseFrightenedDirection(options, currentTile, context.frightenedHistory);
     }
 
     return chooseBestDirection(options, currentTile, this.chooseTarget(context));

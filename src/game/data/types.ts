@@ -1,3 +1,5 @@
+import type { AudioKey } from './audio';
+
 export type Direction = 'up' | 'left' | 'down' | 'right';
 
 export interface GridPoint {
@@ -32,6 +34,8 @@ export interface MazeDefinition {
   layout: string[];
 }
 
+export type MusicKey = Extract<AudioKey, `music${string}`>;
+
 export type GlobalEnemyMode = 'scatter' | 'chase';
 export type RoundState = 'intro' | 'playing' | 'paused' | 'respawning' | 'round-clear' | 'game-over';
 
@@ -43,6 +47,7 @@ export interface ModePhase {
 export interface RoundConfig {
   round: number;
   mazeKey: string;
+  musicKey: MusicKey;
   playerSpeed: number;
   enemySpeed: number;
   frightenedSpeed: number;
@@ -77,6 +82,30 @@ export interface CollectibleState {
   tile: GridPoint;
   type: Extract<TileType, 'pellet' | 'power-pellet'>;
   collected: boolean;
+}
+
+export interface LeaderboardEntry {
+  initials: string;
+  score: number;
+  round: number;
+  achievedAt: number;
+}
+
+export interface RiddleDefinition {
+  id: string;
+  prompt: string;
+  choices: [string, string, string];
+  correctIndex: number;
+}
+
+export interface GameResumeData {
+  round: number;
+  mazeKey: string;
+  lives: number;
+  score: number;
+  collectedPelletKeys: string[];
+  continuesUsed: number;
+  usedRiddleIds: string[];
 }
 
 export interface FruitDefinition {

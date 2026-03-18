@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import { ENEMY_DEFINITIONS } from '../data/enemies';
-import { maze01 } from '../data/mazes/maze01';
+import { getMazeByKey } from '../data/mazes';
 import { POWER_MODE } from '../data/powerups';
+import { getRoundConfig } from '../data/rounds';
 import { SCORE_VALUES } from '../data/scoring';
-import type { Direction, EnemyMode, GridPoint } from '../data/types';
+import type { Direction, EnemyMode, GameResumeData, GridPoint } from '../data/types';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { AudioManager } from '../systems/AudioManager';
@@ -16,17 +17,28 @@ import { RoundManager } from '../systems/RoundManager';
 import { SaveManager, type ControlsMode } from '../systems/SaveManager';
 import { ScoreManager } from '../systems/ScoreManager';
 import { MobileControls } from '../ui/MobileControls';
-import { GameEvents } from '../utils/GameEvents';
-import { gameEvents } from '../utils/events';
 import { createGameplayKeys, getRequestedDirection, type GameplayKeys } from '../utils/input';
 import { SceneKeys } from '../utils/SceneKeys';
 import { sameGridPoint } from '../utils/grid';
+
+interface GameSceneData {
+  resumeData?: GameResumeData;
+}
+
+interface GameOverPayload {
+  score: number;
+  highScore: number;
+  round: number;
+  continuesUsed: number;
+  continueOffered: boolean;
+  continueData: GameResumeData;
+}
 
 export class GameScene extends Phaser.Scene {
   private gridManager!: GridManager;
   private pelletSystem!: PelletSystem;
   private fruitSystem!: FruitSystem;
-  private movementSystem!: GridMovementSystem;
+  private readonly movementSystem = new GridMovementSystem();
   private player!: Player;
   private enemies: Enemy[] = [];
   private scoreManager!: ScoreManager;
@@ -40,20 +52,23 @@ export class GameScene extends Phaser.Scene {
   private pelletsEatenThisRound = 0;
   private roundElapsedMs = 0;
   private transitionTimer?: Phaser.Time.TimerEvent;
+  private boardContainer?: Phaser.GameObjects.Container;
+  private currentMazeKey = getRoundConfig(1).mazeKey;
+  private resumeData?: GameResumeData;
+  private continuesUsed = 0;
+  private usedRiddleIds: string[] = [];
 
   constructor() {
     super(SceneKeys.Game);
   }
 
+  init(data: GameSceneData): void {
+    this.resumeData = data.resumeData;
+  }
+
   create(): void {
     this.cameras.main.setBackgroundColor('#05080f');
 
-    this.gridManager = new GridManager(this, maze01);
-    this.gridManager.render();
-
-    this.pelletSystem = new PelletSystem(this, this.gridManager);
-    this.fruitSystem = new FruitSystem(this, this.gridManager);
-    this.movementSystem = new GridMovementSystem();
     this.scoreManager = new ScoreManager(this.saveManager);
     this.roundManager = new RoundManager();
     this.audioManager = new AudioManager(this);
@@ -64,34 +79,37 @@ export class GameScene extends Phaser.Scene {
       this.mobileControls = new MobileControls(this, () => this.togglePause());
     }
 
-    const playerSpawn = this.gridManager.getPlayerSpawn();
-    const playerWorld = this.gridManager.tileToWorld(playerSpawn);
-    this.player = new Player(this, playerWorld.x, playerWorld.y, playerSpawn, this.gridManager.tileSize / 16);
-
-    this.enemies = ENEMY_DEFINITIONS.map((definition) => {
-      const world = this.gridManager.tileToWorld(definition.houseTile);
-      return new Enemy(
-        this,
-        world.x,
-        world.y,
-        definition,
-        definition.houseTile,
-        this.gridManager.tileSize / 16,
-      );
-    });
-
     this.keys.pause.on('down', () => this.togglePause());
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.transitionTimer?.remove(false);
       this.mobileControls?.destroy();
+      this.destroyBoard();
       this.audioManager.stopAll();
     });
 
+    const startingRound = this.resumeData?.round ?? 1;
+    const startingMazeKey = this.resumeData?.mazeKey ?? getRoundConfig(startingRound).mazeKey;
+    this.buildBoard(startingMazeKey, this.resumeData?.collectedPelletKeys ?? []);
+
     this.time.delayedCall(0, () => {
-      this.audioManager.playMusic('musicMazeChase');
+      if (this.resumeData) {
+        this.continuesUsed = this.resumeData.continuesUsed;
+        this.usedRiddleIds = [...this.resumeData.usedRiddleIds];
+        this.scoreManager.restoreGame(this.resumeData.score);
+        this.roundManager.restoreRun(this.resumeData.round, this.resumeData.lives, this.pelletSystem.getRemainingCount());
+        this.fruitSystem.reset(this.resumeData.round, this.gridManager.getInitialPelletCount());
+        this.audioManager.playMusic(getRoundConfig(this.resumeData.round).musicKey);
+        this.prepareRespawn();
+        this.resumeData = undefined;
+        return;
+      }
+
+      this.continuesUsed = 0;
+      this.usedRiddleIds = [];
       this.scoreManager.resetGame();
       this.roundManager.startNewGame(this.gridManager.getInitialPelletCount());
+      this.audioManager.playMusic(this.roundManager.getCurrentConfig().musicKey);
       this.prepareRound();
     });
   }
@@ -135,6 +153,47 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private buildBoard(mazeKey: string, collectedPelletKeys: string[] = []): void {
+    this.destroyBoard();
+
+    const maze = getMazeByKey(mazeKey);
+    this.currentMazeKey = maze.key;
+    this.gridManager = new GridManager(this, maze);
+    this.boardContainer = this.gridManager.render();
+
+    this.pelletSystem = new PelletSystem(this, this.gridManager);
+    this.pelletSystem.reset(collectedPelletKeys);
+    this.fruitSystem = new FruitSystem(this, this.gridManager);
+
+    const playerSpawn = this.gridManager.getPlayerSpawn();
+    const playerWorld = this.gridManager.tileToWorld(playerSpawn);
+    this.player = new Player(this, playerWorld.x, playerWorld.y, playerSpawn, this.gridManager.tileSize / 16);
+
+    this.enemies = ENEMY_DEFINITIONS.map((definition) => {
+      const world = this.gridManager.tileToWorld(definition.houseTile);
+      return new Enemy(
+        this,
+        world.x,
+        world.y,
+        definition,
+        definition.houseTile,
+        this.gridManager.tileSize / 16,
+      );
+    });
+  }
+
+  private destroyBoard(): void {
+    this.transitionTimer?.remove(false);
+    this.transitionTimer = undefined;
+    this.boardContainer?.destroy(true);
+    this.boardContainer = undefined;
+    this.pelletSystem?.destroy();
+    this.fruitSystem?.clearFruit();
+    this.player?.destroy();
+    this.enemies.forEach((enemy) => enemy.destroy());
+    this.enemies = [];
+  }
+
   private prepareRound(): void {
     this.transitionTimer?.remove(false);
     this.pelletSystem.reset();
@@ -147,6 +206,7 @@ export class GameScene extends Phaser.Scene {
     const playerWorld = this.gridManager.tileToWorld(this.player.spawnTile);
     this.player.resetTo(this.player.spawnTile, playerWorld);
     this.player.speed = config.playerSpeed;
+    this.player.setPowered(false);
 
     for (const enemy of this.enemies) {
       const world = this.gridManager.tileToWorld(enemy.spawnTile);
@@ -156,7 +216,7 @@ export class GameScene extends Phaser.Scene {
 
     this.roundManager.clearPowerMode();
     this.audioManager.stopFrightenedLoop();
-    this.audioManager.playMusic('musicMazeChase');
+    this.audioManager.playMusic(config.musicKey);
     this.gridManager.setGhostDoorOpen(false);
 
     this.transitionTimer = this.time.delayedCall(config.introDelayMs, () => {
@@ -208,6 +268,7 @@ export class GameScene extends Phaser.Scene {
     this.roundManager.triggerPowerMode(config.frightenedDurationMs, config.frightenedFlashMs);
     this.scoreManager.resetEnemyCombo();
     this.audioManager.startFrightenedLoop();
+    this.player.setPowered(true);
 
     for (const enemy of this.enemies) {
       if (enemy.mode === 'scatter' || enemy.mode === 'chase') {
@@ -220,6 +281,7 @@ export class GameScene extends Phaser.Scene {
   private endPowerMode(): void {
     this.audioManager.stopFrightenedLoop();
     this.scoreManager.resetEnemyCombo();
+    this.player.setPowered(false);
 
     for (const enemy of this.enemies) {
       if (enemy.mode === 'frightened') {
@@ -317,7 +379,12 @@ export class GameScene extends Phaser.Scene {
           playerTile: this.player.currentTile,
           playerDirection: this.player.direction,
           glintTile,
+          frightenedHistory: enemy.getFrightenedHistory(),
         });
+
+        if (enemy.mode === 'frightened' && chosenDirection) {
+          enemy.rememberFrightenedTile(this.gridManager.getAdjacentTile(enemy.currentTile, chosenDirection));
+        }
       }
 
       this.movementSystem.moveEnemy(
@@ -333,7 +400,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private shouldReleaseEnemy(enemy: Enemy): boolean {
-    return this.roundElapsedMs >= enemy.definition.release.delayMs;
+    return (
+      this.roundElapsedMs >= enemy.definition.release.delayMs &&
+      this.pelletsEatenThisRound >= enemy.definition.release.pelletsEaten
+    );
   }
 
   private getEnemySpeed(mode: EnemyMode, tile: GridPoint): number {
@@ -421,8 +491,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.player.setPlayerState('dying');
+    this.player.setPowered(false);
     this.audioManager.playDeath();
-    this.audioManager.stopFrightenedLoop();
     this.fruitSystem.clearFruit();
     this.roundManager.clearPowerMode();
     this.fxManager.nudgeCamera(0.004, 200);
@@ -432,25 +502,34 @@ export class GameScene extends Phaser.Scene {
     this.transitionTimer?.remove(false);
 
     if (isGameOver) {
+      const scoreSnapshot = this.scoreManager.getSnapshot();
+      const roundSnapshot = this.roundManager.getSnapshot();
+      const payload: GameOverPayload = {
+        ...scoreSnapshot,
+        round: roundSnapshot.round,
+        continuesUsed: this.continuesUsed,
+        continueOffered: this.continuesUsed < 3,
+        continueData: this.getContinueData(),
+      };
+
       this.transitionTimer = this.time.delayedCall(1300, () => {
         this.scene.stop(SceneKeys.UI);
-        this.scene.start(SceneKeys.GameOver, {
-          ...this.scoreManager.getSnapshot(),
-          round: this.roundManager.getSnapshot().round,
-        });
+        this.scene.start(SceneKeys.GameOver, payload);
       });
       return;
     }
 
     this.transitionTimer = this.time.delayedCall(this.roundManager.getCurrentConfig().respawnDelayMs, () => {
-      this.player.setPlayerState('respawning');
       this.prepareRespawn();
     });
   }
 
   private prepareRespawn(): void {
+    this.roundManager.setRespawning();
+
     const playerWorld = this.gridManager.tileToWorld(this.player.spawnTile);
     this.player.resetTo(this.player.spawnTile, playerWorld);
+    this.player.setPowered(false);
 
     for (const enemy of this.enemies) {
       const world = this.gridManager.tileToWorld(enemy.spawnTile);
@@ -460,6 +539,9 @@ export class GameScene extends Phaser.Scene {
     this.roundElapsedMs = 0;
     this.pelletsEatenThisRound = Math.max(0, this.gridManager.getInitialPelletCount() - this.pelletSystem.getRemainingCount());
     this.mobileControls?.clearRequestedDirection();
+    this.audioManager.stopFrightenedLoop();
+    this.audioManager.playMusic(this.roundManager.getCurrentConfig().musicKey);
+    this.gridManager.setGhostDoorOpen(false);
 
     this.transitionTimer = this.time.delayedCall(700, () => {
       this.roundManager.setPlaying();
@@ -471,15 +553,31 @@ export class GameScene extends Phaser.Scene {
     this.audioManager.playVictory();
     this.audioManager.stopFrightenedLoop();
     this.fruitSystem.clearFruit();
+    this.player.setPowered(false);
     this.fxManager.flashScreen(0xffd166, 0.18, 200);
     this.fxManager.flashMessage('Round clear');
     this.scoreManager.add(SCORE_VALUES.roundClear);
 
     this.transitionTimer?.remove(false);
     this.transitionTimer = this.time.delayedCall(1400, () => {
+      const nextRound = this.roundManager.getSnapshot().round + 1;
+      const nextConfig = getRoundConfig(nextRound);
+      this.buildBoard(nextConfig.mazeKey);
       this.roundManager.advanceRound(this.gridManager.getInitialPelletCount());
       this.prepareRound();
     });
+  }
+
+  private getContinueData(): GameResumeData {
+    return {
+      round: this.roundManager.getSnapshot().round,
+      mazeKey: this.currentMazeKey,
+      lives: 1,
+      score: this.scoreManager.getSnapshot().score,
+      collectedPelletKeys: this.pelletSystem.getCollectedKeys(),
+      continuesUsed: this.continuesUsed + 1,
+      usedRiddleIds: [...this.usedRiddleIds],
+    };
   }
 
   private togglePause(): void {

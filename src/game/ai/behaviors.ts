@@ -7,6 +7,7 @@ export interface BehaviorContext {
   playerTile: GridPoint;
   playerDirection: Direction | null;
   glintTile: GridPoint;
+  frightenedHistory?: GridPoint[];
 }
 
 export const chooseScatterTarget = (enemy: EnemyDefinition): GridPoint => enemy.scatterTarget;
@@ -77,6 +78,33 @@ export const chooseBestDirection = (
       return leftDistance - rightDistance;
     }
     return DIRECTION_PRIORITY.indexOf(left) - DIRECTION_PRIORITY.indexOf(right);
+  });
+
+  return ranked[0] ?? null;
+};
+
+export const chooseFrightenedDirection = (
+  options: Direction[],
+  currentTile: GridPoint,
+  frightenedHistory: GridPoint[] = [],
+): Direction | null => {
+  if (options.length === 0) {
+    return null;
+  }
+
+  const ranked = [...options].sort((left, right) => {
+    const leftTile = translatePoint(currentTile, left);
+    const rightTile = translatePoint(currentTile, right);
+    const leftRecentIndex = frightenedHistory.findIndex((tile) => tile.x === leftTile.x && tile.y === leftTile.y);
+    const rightRecentIndex = frightenedHistory.findIndex((tile) => tile.x === rightTile.x && tile.y === rightTile.y);
+    const leftWeight = leftRecentIndex === -1 ? Number.MAX_SAFE_INTEGER : frightenedHistory.length - leftRecentIndex;
+    const rightWeight = rightRecentIndex === -1 ? Number.MAX_SAFE_INTEGER : frightenedHistory.length - rightRecentIndex;
+
+    if (leftWeight !== rightWeight) {
+      return rightWeight - leftWeight;
+    }
+
+    return Math.random() < 0.5 ? -1 : 1;
   });
 
   return ranked[0] ?? null;

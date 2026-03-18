@@ -37,7 +37,10 @@ export class AudioManager {
       return;
     }
 
-    if (this.currentMusic?.key === key && this.currentMusic.isPlaying) {
+    if (this.currentMusic?.key === key) {
+      if (!this.currentMusic.isPlaying) {
+        this.currentMusic.play({ loop: true, volume });
+      }
       return;
     }
 
@@ -56,7 +59,8 @@ export class AudioManager {
   }
 
   playDeath(): void {
-    this.stopAll();
+    this.stopEffects();
+    this.stopFrightenedLoop();
     this.playEffect('sfxDeath');
   }
 
@@ -143,11 +147,15 @@ export class AudioManager {
     this.currentMusic = undefined;
   }
 
-  stopAll(): void {
+  stopEffects(): void {
     this.currentSfx?.stop();
     this.currentSfx?.destroy();
     this.currentSfx = undefined;
     this.currentSfxPriority = -1;
+  }
+
+  stopAll(): void {
+    this.stopEffects();
     this.stopFrightenedLoop();
     this.stopMusic();
   }

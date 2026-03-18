@@ -3,6 +3,7 @@ import { EnemyBrain } from '../ai/EnemyBrain';
 import type { Direction, EnemyDefinition, EnemyMode, GridPoint } from '../data/types';
 
 export class Enemy extends Phaser.GameObjects.Sprite {
+  private readonly frightenedHistory: GridPoint[] = [];
   readonly brain: EnemyBrain;
   readonly definition: EnemyDefinition;
   direction: Direction | null = 'up';
@@ -43,6 +44,7 @@ export class Enemy extends Phaser.GameObjects.Sprite {
     this.isLeavingHouse = this.released;
     this.isReturningHome = false;
     this.flashing = false;
+    this.frightenedHistory.length = 0;
     this.clearTint();
     this.setTexture(this.definition.spriteKey);
     this.setPosition(world.x, world.y);
@@ -90,6 +92,18 @@ export class Enemy extends Phaser.GameObjects.Sprite {
   setFlashing(flashing: boolean): void {
     this.flashing = flashing;
     this.syncTexture();
+  }
+
+  rememberFrightenedTile(tile: GridPoint): void {
+    this.frightenedHistory.push({ ...tile });
+
+    while (this.frightenedHistory.length > 6) {
+      this.frightenedHistory.shift();
+    }
+  }
+
+  getFrightenedHistory(): GridPoint[] {
+    return this.frightenedHistory.map((tile) => ({ ...tile }));
   }
 
   private syncTexture(): void {
